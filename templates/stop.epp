@@ -1,0 +1,10 @@
+<%- |
+  String $name,
+| -%>
+#!/bin/bash
+
+set -e
+
+/usr/bin/docker stop "hoist_<%= $name %>" || true
+/usr/bin/docker rm "hoist_<%= $name %>" || true
+

@@ -1,0 +1,9 @@
+<%- |
+  String $image,
+  String $tag = "latest",
+| -%>
+#!/bin/bash
+
+set -e
+
+/usr/bin/docker pull "<%= $image %>:<%= $tag %>"

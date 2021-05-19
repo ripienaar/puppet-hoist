@@ -1,0 +1,35 @@
+<%- |
+  String $name,
+  String $image,
+  String $tag = "latest",
+  String $network = "bridge",
+  Boolean $syslog = false,
+  Array[String] $ports = [],
+  Array[String] $volumes = [],
+  Array[String] $environment = [],
+| -%>
+#!/bin/bash
+
+set -e
+
+./stop.sh
+
+/usr/bin/docker run \
+  -d \
+  --net "<%= $network %>" \
+  --name "<%= $name %>" \
+<% if $syslog { -%>
+  --log-driver syslog \
+  --log-opt "tag=<%= $name %>" \
+<% } -%>
+<% $volumes.each |$volume| { -%>
+  -v "<%= $volume %>" \
+<% } -%>
+<% $ports.each |$port| { -%>
+  -p "<%= $port %>" \
+<% } -%>
+<% $environment.each |$env| { -%>
+  -e "<%= $env %>" \
+<% } -%>
+  --rm \
+  "<%= $image %>:<%= $tag %>"

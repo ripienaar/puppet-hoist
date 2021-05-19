@@ -1,0 +1,5 @@
+---
+lookup_options:
+  hoist::containers:
+    merge:
+      strategy: "deep"
