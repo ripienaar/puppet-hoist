@@ -28,7 +28,7 @@ define hoist::container(
 
     "${_store}/${_container_name}/env.sh":
       mode    => "0755",
-      content => epp("hoist/env.epp", {"kv" => $kv_update, "image" => $image, "tag" => $image_tag});
+      content => epp("hoist/env.epp", {"name" =>  $name, "kv" => $kv_update, "image" => $image, "tag" => $image_tag});
 
     "${_store}/${_container_name}/update.sh":
       mode    => "0755",
