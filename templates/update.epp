@@ -1,9 +1,13 @@
-<%- |
-  String $image,
-  String $tag = "latest",
-| -%>
 #!/bin/bash
 
 set -e
 
-/usr/bin/docker pull "<%= $image %>:<%= $tag %>"
+. ./env.sh
+
+if [ -z "${IMAGE}" ];
+then
+  echo "image not set"
+  exit 1
+fi
+
+/usr/bin/docker pull "${IMAGE}"

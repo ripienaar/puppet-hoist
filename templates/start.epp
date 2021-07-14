@@ -1,7 +1,7 @@
 <%- |
   String $name,
-  String $image,
-  String $tag = "latest",
+  String $command = "",
+  String $entrypoint = "",
   String $network = "bridge",
   Boolean $syslog = false,
   Array[String] $ports = [],
@@ -12,7 +12,14 @@
 
 set -e
 
+. ./env.sh
 ./stop.sh
+
+if [ -z "${IMAGE}" ];
+then
+  echo "image not set"
+  exit 1
+fi
 
 /usr/bin/docker run \
   -d \
@@ -31,5 +38,8 @@ set -e
 <% $environment.each |$env| { -%>
   -e "<%= $env %>" \
 <% } -%>
+<% if $entrypoint != "" { -%>
+  --entrypoint <%= $entrypoint %> \
+<% } -%>
   --rm \
-  "<%= $image %>:<%= $tag %>"
+  "${IMAGE}" <% if $command != "" { %><%= $command %><% } %>

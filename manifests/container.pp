@@ -1,8 +1,12 @@
 define hoist::container(
   String $image,
   String $image_tag = "latest",
+  String $command = "",
+  String $entrypoint = "",
   String $network = "bridge",
   Boolean $syslog = false,
+  Boolean $kv_update = false,
+  Integer $kv_interval = 10,
   Array[String] $ports = [],
   Array[String] $volumes = [],
   Array[String] $environment = [],
@@ -20,9 +24,13 @@ define hoist::container(
       owner  => "root",
       group  => "root";
 
+    "${_store}/${_container_name}/env.sh":
+      mode    => "0755",
+      content => epp("hoist/env.epp", {"kv" => $kv_update, "image" => $image, "tag" => $image_tag});
+
     "${_store}/${_container_name}/update.sh":
       mode    => "0755",
-      content => epp("hoist/update.epp", {"image" => $image, "tag" => $image_tag});
+      content => epp("hoist/update.epp");
 
     "${_store}/${_container_name}/restart.sh":
       mode    => "0755",
@@ -37,16 +45,16 @@ define hoist::container(
       content => epp("hoist/stop.epp", {"name" => $name});
 
     "${_store}/${_container_name}/start.sh":
-      mode                 => "0755",
-      content              => epp("hoist/start.epp", {
-          "name"           => $_container_name,
-          "image"          => $image,
-          "tag"            => $image_tag,
-          "network"        => $network,
-          "syslog"         => $syslog,
-          "ports"          => $ports,
-          "volumes"        => $volumes,
-          "environment"    => $environment,
+      mode              => "0755",
+      content           => epp("hoist/start.epp", {
+          "name"        => $_container_name,
+          "command"     => $command,
+          "entrypoint"  => $entrypoint,
+          "network"     => $network,
+          "syslog"      => $syslog,
+          "ports"       => $ports,
+          "volumes"     => $volumes,
+          "environment" => $environment,
         }
       );
   }
@@ -92,11 +100,29 @@ define hoist::container(
     }
   ]
 
+  if $kv_update {
+    $kv_watcher = [{
+      "name"               => "kv_tag",
+      "type"               => "kv",
+      "interval"           => "${kv_interval}s",
+      "success_transition" => "update",
+      "state_match"        => ["RUN", "RESTART", "START"],
+      "properties"         => {
+        "bucket"           => "HOIST_${name}",
+        "key"              => "TAG",
+        "mode"             => "poll",
+        "bucket_prefix"    => false
+      }
+    }]
+  } else {
+    $kv_watcher =[]
+  }
+
   $_watchers = [
     {
       "name"                        => "check_running",
       "type"                        => "exec",
-      "interval"                    => "10s",
+      "interval"                    => "20s",
       "fail_transition"             => "restart",
       "state_match"                 => ["RUN"],
       "properties"                  => {
@@ -143,12 +169,13 @@ define hoist::container(
       "type"                   => "file",
       "interval"               => "30s",
       "success_transition"     => "restart",
+      "state_match"            => ["RUN"],
       "properties"             => {
         "path"                 => "./start.sh",
         "gather_initial_state" => true
       }
     }
-  ]
+  ] + $kv_watcher
 
   choria::machine{"hoist_${name}":
     initial_state => "RUN",
