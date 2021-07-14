@@ -57,9 +57,11 @@ This creates a basic container running `example/weather:v1` with ports and volum
 ### Key-Value based updates
 
 You can use the Choria Key-Value store to manage this container, first we create a bucket to put data in.
+Here I have a redundant Choria Broker cluster with 3 nodes so the KV bucket can be reliably distributed
+and replicated across them.
 
 ```nohighlight
-$ choria kv add HOIST_weather
+$ choria kv add HOIST --replicas 3
 ```
 
 We can now instruct Hoist to watch the KV for updates:
@@ -85,7 +87,7 @@ the `image_tag: v1` will be used as a default starting point.
 Updating to the next version is then a matter of writing data to the KV:
 
 ```nohighlight
-$ choria kv put HOIST_weather TAG v2
+$ choria kv put HOIST container/weather/tag v2
 ```
 
 The running instances will soon update to the `example/weather:v2` image. Use `choria scout watch` to view

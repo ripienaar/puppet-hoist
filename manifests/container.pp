@@ -110,8 +110,8 @@ define hoist::container(
       "success_transition" => "update",
       "state_match"        => ["RUN", "RESTART", "START"],
       "properties"         => {
-        "bucket"           => "HOIST_${name}",
-        "key"              => "TAG",
+        "bucket"           => "HOIST",
+        "key"              => "container/${name}/tag",
         "mode"             => "poll",
         "bucket_prefix"    => false
       }
