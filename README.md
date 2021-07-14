@@ -150,7 +150,7 @@ The service will immediately update.
 
 ## Planned features
 
- * Integration with Choria Concurrency Governor for rolling updates without outages
+ * Integration with [Choria Concurrency Governor](https://choria.io/docs/streams/governor/) for rolling updates without outages
 
 ## Contact
 
