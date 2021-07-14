@@ -194,7 +194,9 @@ Discovering nodes using the inventory method .... 9
 Finished processing 9 / 9 hosts in 236ms
 ```
 
-The service will immediately update.
+The service will immediately transition it's desired state to update, updates will continue
+in the background subject to KV and Governor control, update failures will automatically retry
+until they succeed.
 
 ## Contact
 
