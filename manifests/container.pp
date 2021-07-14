@@ -7,6 +7,8 @@ define hoist::container(
   Boolean $syslog = false,
   Boolean $kv_update = false,
   Integer $kv_interval = 10,
+  String $restart_governor = "",
+  String $update_governor = "",
   Array[String] $ports = [],
   Array[String] $volumes = [],
   Array[String] $environment = [],
@@ -101,7 +103,7 @@ define hoist::container(
   ]
 
   if $kv_update {
-    $kv_watcher = [{
+    $_kv_watcher = [{
       "name"               => "kv_tag",
       "type"               => "kv",
       "interval"           => "${kv_interval}s",
@@ -115,7 +117,19 @@ define hoist::container(
       }
     }]
   } else {
-    $kv_watcher =[]
+    $_kv_watcher =[]
+  }
+
+  if $update_governor != "" {
+    $_update_governor = {"governor" => $update_governor}
+  } else {
+    $_update_governor = {}
+  }
+
+  if $restart_governor != "" {
+    $_restart_governor = {"governor" => $restart_governor}
+  } else {
+    $_restart_governor = {}
   }
 
   $_watchers = [
@@ -140,7 +154,7 @@ define hoist::container(
       "properties"                  => {
         "command"                   => "./restart.sh",
         "timeout"                   => "60s"
-      }
+      } + $_restart_governor
     },
     {
       "name"                        => "stop_to_maintenance",
@@ -162,7 +176,7 @@ define hoist::container(
       "properties"                  => {
         "command"                   => "./update.sh",
         "timeout"                   => "120s"
-      }
+      } + $_update_governor
     },
     {
       "name"                   => "restart_on_start_sh_change",
@@ -173,9 +187,9 @@ define hoist::container(
       "properties"             => {
         "path"                 => "./start.sh",
         "gather_initial_state" => true
-      }
+      } + $_restart_governor
     }
-  ] + $kv_watcher
+  ] + $_kv_watcher
 
   choria::machine{"hoist_${name}":
     initial_state => "RUN",

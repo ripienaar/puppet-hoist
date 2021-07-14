@@ -1,16 +1,19 @@
 ## Choria Container Hoist
 
-This is a tiny container manager that uses [Choria Autonomous Agents](https://choria.io/docs/autoagents/) and [Choria Key-Value Store](https://choria.io/docs/streams/key-value/)
-to manage a container.
+This is a tiny container manager that uses [Choria Autonomous Agents](https://choria.io/docs/autoagents/), [Choria Key-Value Store](https://choria.io/docs/streams/key-value/) and [Choria Governor](https://choria.io/docs/streams/governor/) to manage a container.
 
 The system downloads a container onto a node, starts it and checks it. Check failures are remediated by restarts. Restarts and updates can be initiated in an adhoc fasion.
 Updates to a new version can be initiated via PUT to the Choria Key-Value store.
 
  * Supports running any docker container
  * Support customizing commands, entrypoints, ports, volumes and environment
- * Support rolling updates via Key-Value store updates
+ * Support rolling updates via Choria Key-Value store updates
+ * Support no downtime updates and restarts by using a Choria Governor to limit concurrency
  * Containers are actively managed, health checked, restarted and updated by the Choria daemon
  * Maintenance mode that pauses the container manager allowing manual intervention without the system interfering
+
+You can think of this as a tiny k8s operator that manages one thing in isolation.  By joining these isolated containers on a Key-Value store for updates and a Governor
+for roll out strategy management one can have declaritive real time container management in large clusters with regional or multi cluster update strategies.
 
 ## Usage
 
@@ -88,6 +91,49 @@ $ choria kv put HOIST_weather TAG v2
 The running instances will soon update to the `example/weather:v2` image. Use `choria scout watch` to view
 the state changes in real time.
 
+### Concurrency Control
+
+Hoist can optionally control the concurrency of starts, restarts and updates meaning that if you have a number of
+running containers and do an update via Puppet, Key-Value Store or Ad-Hoc management that only a certain number
+of containers will go down at any given time.
+
+To use this we create a governor:
+
+```nohighlight
+$ choria governor add HOIST_WEATHER 1 5m
+```
+
+This would allow 1 container in a group to be updates/restarted at the same time.
+
+We can now tell Hoist to use this governor:
+
+```yaml
+hoist::containers:
+  weather:
+    restart_governor: HOIST_WEATHER
+    update_governor: HOIST_WEATHER
+    kv_update: true
+    image: example/weather
+    image_tag: v1
+    syslog: true
+    environment:
+      - WEATHER_API_KEY=c2..4a
+    volumes:
+      - /srv/weather/logs:/logs
+    ports:
+      - 8080:8080
+```
+
+This combined with the Key-Value store or adhoc updates below can ensure that unattended updates do not
+take the entire cluster down.
+
+The `choria tool event` command will show a live view of the Governor to see how updates happen. Concurrency
+can be adjusted using the `choria governor` command and updates will take effect immediately without changes
+to the managed containers.
+
+There are 2 governors that can be set, the `update_governor` will limit concurrent docker pulls while the `restart_governor`
+will limit concurrent restarts.  It's safe to set them the same as here but the flexibility is there if needed.
+
 ### Ad-Hoc management
 
 One can interact with all or some of the weather service instances from the cli, here are some examples:
@@ -148,10 +194,6 @@ Finished processing 9 / 9 hosts in 236ms
 
 The service will immediately update.
 
-## Planned features
-
- * Integration with [Choria Concurrency Governor](https://choria.io/docs/streams/governor/) for rolling updates without outages
-
-## Contact
+## Contact
 
 R.I.Pienaar / @ripienaar / rip@devco.net
