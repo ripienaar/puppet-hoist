@@ -155,7 +155,7 @@ We have the following transitions available:
 Once in maintenance mode the `resume` transition will put things back to normal.
 
 ```
-$ choria req choria_util machine_state name=hoist
+$ choria req choria_util machine_state name=hoist_weather
 ...
 n1-lon
 
@@ -183,7 +183,7 @@ Summary of Version:
 We can now transition to `update` which will fetch the latest version of the image and restart:
 
 ```
-$ choria req choria_util machine_transition name=hoist_weather_v2 transition=update -C /nats/
+$ choria req choria_util machine_transition name=hoist_weather transition=update
 Discovering nodes using the inventory method .... 9
 
 9 / 9    0s [==============================================================================] 100%
