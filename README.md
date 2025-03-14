@@ -9,6 +9,8 @@ Updates to a new version can be initiated via PUT to the Choria Key-Value store.
  * Support customizing commands, entrypoints, ports, volumes and environment
  * Support rolling updates via Choria Key-Value store updates
  * Support no downtime updates and restarts by using a Choria Governor to limit concurrency
+ * Support triggering container restarts by touching files on the host
+ * Support for registering service ports into a service discovery store
  * Containers are actively managed, health checked, restarted and updated by the Choria daemon
  * Maintenance mode that pauses the container manager allowing manual intervention without the system interfering
 
@@ -136,6 +138,59 @@ to the managed containers.
 There are 2 governors that can be set, the `update_governor` will limit concurrent docker pulls while the `restart_governor`
 will limit concurrent restarts.  It's safe to set them the same as here but the flexibility is there if needed.
 
+### Port Registration
+
+Containers that listen on ports can publish those ports to a Choria Key-Value bucket where other tools can
+watch for those updates and configure systems like load balancers or reverse proxies:
+
+```yaml
+hoist::containers:
+  surveyor:
+    image: natsio/nats-surveyor
+    image_tag: latest
+    volumes:
+      - /srv/nats/etc/system.cred:/system.cred
+    command: "-s nats://n1.example.net:4222 --creds /system.cred -c 9 --accounts"
+    ports:
+      - 127.0.0.1:7777:7777/tcp
+    register_ports:
+      - cluster: "%{facts.location}"
+        service: surveyor
+        protocol: prometheus
+        ip: "%{facts.networking.ip}"
+        port: 7777
+        priority: 1
+        annotations:
+          prometheus.io/scrape: "true"
+          prometheus.io/path: /metrics
+```
+
+Here we publish the port `7777` using the, currently experimental, choria `gossip` watcher into a Key-Value store:
+
+```
+$ choria kv add --replicas 3 CHORIA_SERVICES --ttl 1m
+$ choria kv keys CHORIA_SERVICES
+lon.prometheus.surveyor.2ed769ea-37b6-49c4-aba4-b046440e8cf2
+$ choria kv get CHORIA_SERVICES lon.prometheus.surveyor.2ed769ea-37b6-49c4-aba4-b046440e8cf2 --raw|jq
+{
+  "cluster": "lon",
+  "service": "surveyor",
+  "protocol": "prometheus",
+  "address": "192.168.1.10",
+  "port": 7777,
+  "priority": 1,
+  "annotations": {
+    "prometheus.io/path": "/metrics",
+    "prometheus.io/scrape": "true"
+  }
+}
+```
+
+The entries will be written every 15 seconds so here if the service has not been heard of for 4 cycles
+it will vanish from the KV bucket.
+
+This data can be read using a KV Watch to build related configuration files.
+
 ### Ad-Hoc management
 
 One can interact with all or some of the weather service instances from the cli, here are some examples:
@@ -194,9 +249,7 @@ Discovering nodes using the inventory method .... 9
 Finished processing 9 / 9 hosts in 236ms
 ```
 
-The service will immediately transition it's desired state to update, updates will continue
-in the background subject to KV and Governor control, update failures will automatically retry
-until they succeed.
+The service will immediately update.
 
 ## Contact
 

@@ -6,12 +6,15 @@ define hoist::container(
   String $network = "bridge",
   Boolean $syslog = false,
   Boolean $kv_update = false,
-  Integer $kv_interval = 10,
+  Integer $kv_interval = 60,
   String $restart_governor = "",
   String $update_governor = "",
+  Array[Stdlib::Absolutepath] $restart_files = [],
   Array[String] $ports = [],
   Array[String] $volumes = [],
   Array[String] $environment = [],
+  Array[Hash] $register_ports = [],
+  Enum["present", "absent"] $ensure = "present",
 ) {
   if !("plugin.choria.machine.store" in $choria::server_config) {
     fail("Cannot configure choria::machine ${name}, plugin.choria.machine.store is not set")
@@ -102,6 +105,23 @@ define hoist::container(
     }
   ]
 
+  $_restart_file_watchers = $restart_files.map |$file| {
+    {
+      "name"                   => "restart_on_${file}",
+      "type"                   => "file",
+      "success_transition"     => "restart",
+      "state_match"            => ["RUN"],
+      "properties"             => {
+        "path"                 => $file,
+        "gather_initial_state" => true,
+      }
+    }
+  }
+
+  if $kv_update and !$hoist::kv {
+    fail("$hoist::kv should be true for KV enabled containers")
+  }
+
   if $kv_update {
     $_kv_watcher = [{
       "name"               => "kv_tag",
@@ -131,6 +151,28 @@ define hoist::container(
   } else {
     $_restart_governor = {}
   }
+
+	if $register_ports.length > 0 {
+		if $hoist::registration_interval >= 30 {
+			$_interval = $hoist::registration_interval / 3
+		} else {
+			$_interval = 10
+		}
+
+		$_registration_watcher = $register_ports.map |$p| {
+			{
+				"name"           => sprintf("registration_%<protocol>s_%<port>s", $p),
+				"type"           => "gossip",
+				"interval"       => sprintf("%ds", $_interval),
+				"state_match"    => ["RUN"],
+				"properties"     => {
+					"registration" => $p
+				}
+			}
+		}
+	} else {
+		$_registration_watcher = {}
+	}
 
   $_watchers = [
     {
@@ -189,7 +231,7 @@ define hoist::container(
         "gather_initial_state" => true
       } + $_restart_governor
     }
-  ] + $_kv_watcher
+  ] + $_kv_watcher + $_restart_file_watchers + $_registration_watcher
 
   choria::machine{"hoist_${name}":
     initial_state => "RUN",
