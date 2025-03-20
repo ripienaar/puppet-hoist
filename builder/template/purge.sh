@@ -1,0 +1,15 @@
+#!/bin/bash
+
+set -e
+
+running=$(/usr/bin/docker ps --format '{{ "{{.Names}}" }}' --filter "name=hoist*")
+
+for i in ${running}
+do
+  file="${i}.container"
+  if [ ! -f "${file}" ]; then
+    echo "Removing container ${i} - ${file} does not exist"
+    /usr/bin/docker kill "${i}" || true
+    /usr/bin/docker rm "${i}" || true
+  fi
+done

@@ -1,0 +1,196 @@
+name: hoist
+description: Choria Container Hoist Generator
+author: R.I.Pienaar <rip@devco.net>
+version: 0.0.1
+
+commands:
+  - name: generate
+    type: parent
+    aliases: [gen]
+    description: Generates Autonomous Agent Plugins
+    commands:
+      - name: plugin
+        description: |
+          Generates a Hoist Container Manager Autonomous Agent Plugin
+          
+          This generates similar containers to those Puppet would produce but by
+          following a form-based approach to gather the requirements.
+
+          Once rendered use the "choria tool machine plugin" commands to package
+          the resulting Autonomous Agent into a plugin.
+        type: form
+        arguments:
+          - name: target
+            description: The directory to write the plugin to
+            required: true
+        properties:
+          - name: name
+            required: true
+            validation: 'value matches "^\\w+$"'
+            description: |
+              The name of the container to create
+              
+              When running the container will be called hoist_${name},
+              this must be unique for your deployment
+
+          - name: image
+            description: Docker image to use
+            required: true
+            validation: 'value matches "^[\\w\\/]+$"'
+
+          - name: image_tag
+            description: The image tag to use
+            default: latest
+            validation: 'value matches "^[^\\s]+$"'
+
+          - name: command
+            description: Override command to execute in the container
+
+          - name: entrypoint
+            description: Override entrypoint to use in the container
+
+          - name: network
+            description: The network to connect the container to
+            default: bridge
+            required: true
+            validation: 'value matches "^[^\\s]+$"'
+
+          - name: ports
+            description: |
+              Ports to expose
+              
+              Add entries in the form of 8080:8080, multiple entries
+              can be made with the first blank entry terminating input
+            type: array
+            validation: 'value matches "^[^\\s]+$"'
+
+          - name: volumes
+            description: |
+              Volumes to mount
+              
+              Add entries in the form of /tmp/host:/host, multiple entries
+              can be made with the first blank entry terminating input
+            type: array
+            validation: 'value matches "^[^\\s]+$"'
+
+          - name: environment
+            description: |
+              Set environment variables
+              
+              Add entries in the form of KEY=VALUE, multiple entries
+              can be made with the first blank entry terminating input
+            type: array
+
+          - name: syslog
+            description: Log to syslog
+            type: bool
+            default: "false"
+
+          - name: kv_update
+            description: |
+              Support updating via KV updates
+              
+              When enabled the tag being deployed will default to the value
+              supplied here but can be overrode by putting a value in the HOIST
+              KV bucket in the key container.${name}.tag
+            type: bool
+            default: "false"
+
+          - name: kv_interval
+            description: How frequency key-value should be polled, in seconds
+            type: integer
+            default: "60"
+            validation: "int(value) >= 60 && int(value) <= 300"
+            conditional: Input.kv_update == true
+          - name: restart_files
+            type: array
+            description: |
+              Restart the container when any of the supplied files change
+              
+              The files are a list of files on the HOST, if any of these
+              files change the container will restart.
+              
+              Multiple entries can be made with the first blank entry terminating input
+          - name: governors
+            description: Control update and restart using Governors
+            type: object
+            default: "false"
+            properties:
+            - name: restart_governor
+              description: The governor to use when restarting the container
+              validation: 'value matches "^[\\w_-]+$"'
+            - name: update_governor
+              description: The governor to use when updating the container
+              validation: 'value matches "^[\\w_-]+$"'
+          - name: register_ports
+            type: array
+            empty: absent
+            description: |
+              Annotations to add to the Registered Ports
+              
+              Annotations allow for extra information to be added that might be read
+              by tools who watch for registration messages and then generates configuration
+              for things like monitoring or reverse proxies.
+              
+              Example:
+                
+                prometheus.io/scrape: "true"
+                prometheus.io/path: "/metrics"
+
+            properties:
+                - name: cluster
+                  description: The cluster to export in
+                  required: true
+                  validation: 'value matches "^[\\w]+$"'
+                - name: service
+                  description: The name service to register
+                  required: true
+                  validation: 'value matches "^[\\w]+$"'
+                - name: protocol
+                  description: The protocol to register
+                  required: true
+                  validation: 'value matches "^[\\w]+$"'
+                - name: address
+                  description: The address to register
+                  required: true
+                  validation: 'value matches "^[\\w\\.]+$"'
+                - name: port
+                  description: The port to register
+                  required: true
+                  type: integer
+                  validation: int(value) > 0
+                - name: priority
+                  description: A priority number for this instance
+                  type: integer
+                  default: "1"
+                  validation: int(value) > 0 && int(value) < 10
+                - name: annotations
+                  description: |
+                    Annotations to add to the Registered Ports
+              
+                    Annotations allow for extra information to be added that might be read
+                    by tools who watch for registration messages and then generates configuration
+                    for things like monitoring or reverse proxies.
+                
+                    Example:
+                      
+                      prometheus.io/scrape: "true"
+                      prometheus.io/path: "/metrics"
+                  type: array
+                  empty: absent
+                  properties:
+                    - name: key
+                      description: Key for the annotation
+                      required: true
+                    - name: value
+                      description: Value for the annotation
+                      required: true
+        transform:
+          pipeline:
+            - to_json: {}
+            - scaffold:
+                target: "{{ .Arguments.target }}"
+                source_directory: "{{ AppDir }}/template"
+                post:
+                  - "*.sh": "chmod a+x"
+

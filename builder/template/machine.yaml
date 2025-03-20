@@ -1,0 +1,150 @@
+---
+name: hoist_{{ .Input.name }}
+version: 1.0.0
+initial_state: RUN
+
+transitions:
+  - name: maintenance
+    destination: MAINTENANCE
+    from:
+      - RUN
+      - START
+      - RESTART
+      - STOP
+      - UPDATE
+
+  - name: resume
+    destination: RUN
+    from:
+      - MAINTENANCE
+
+  - name: health_check
+    destination: RUN
+    from:
+      - START
+      - RESTART
+
+  - name: restart
+    destination: RESTART
+    from:
+      - RUN
+      - UPDATE
+
+  - name: update
+    destination: UPDATE
+    from:
+      - RUN
+      - RESTART
+      - START
+  - name: stop
+    destination: STOP
+    from:
+      - RUN
+      - RESTART
+      - START
+
+watchers:
+  - name: "check_running"
+    type: "exec"
+    interval: "20s"
+    fail_transition: "restart"
+    state_match:
+      - "RUN"
+    properties:
+      command: "./check.sh"
+      suppress_success_announce: true
+      timeout: "60s"
+
+  - name: "restart"
+    type: "exec"
+    interval: "15s"
+    success_transition: "health_check"
+    state_match: ["RESTART"]
+    properties:
+      command: "./restart.sh",
+      timeout: "60s"
+      governor: "{{ if .Input.restart_governor }}{{ .Input.restart_governor }}{{ end }}"
+
+  - name: "stop_to_maintenance"
+    type: "exec"
+    interval: "20s"
+    success_transition: "maintenance"
+    state_match:
+      - "STOP"
+    properties:
+      command: "./stop.sh",
+      timeout: "60s"
+
+  - name: "pull_and_start"
+    type: "exec"
+    interval: "20s"
+    success_transition: "restart"
+    state_match:
+     - "UPDATE"
+    properties:
+      command: "./update.sh"
+      timeout: "120s"
+      governor: "{{ if .Input.update_governor }}{{ .Input.update_governor }}{{ end }}"
+
+  - name: "restart_on_start_sh_change"
+    type: "file"
+    interval: "30s"
+    success_transition: "restart"
+    state_match:
+      - "RUN"
+    properties:
+      path: "./start.sh"
+      gather_initial_state: true
+      governor: "{{ if .Input.restart_governor }}{{ .Input.restart_governor }}{{ end }}"
+
+  {{ range .Input.restart_files }}
+  - name: "restart_on_{{ . }}"
+    type: "file"
+    success_transition: "restart"
+    state_match:
+      - "RUN"
+    properties:
+      path: "{{ . }}"
+      gather_initial_state: true
+    }
+  {{- end }}
+
+  {{ if .Input.kv_update }}
+  - name: "kv_tag"
+    type: "kv"
+    interval: "{{ .Input.kv_interval }}s"
+    success_transition: update
+    state_match:
+      - "RUN"
+      - "RESTART"
+      - "START"
+    properties:
+      bucket: "HOIST",
+      key: "container.{{ .Input.name }}.tag",
+      mode: "poll",
+      bucket_prefix: false
+  {{- end }}
+
+  {{ range .Input.register_ports }}
+  - name: "registration_{{ .protocol }}_{{ .port }}"
+    type: "gossip"
+    interval: "10s"
+    state_match:
+      - "RUN"
+    properties:
+      registration:
+        cluster: {{ .cluster }}
+        service: {{ .service }}
+        protocol: {{ .protocol }}
+        address: {{ .address }}
+        port: {{ .port }}
+        priority: {{ .priority }}
+        {{- if .Input.annotations }}
+        annotations:
+        {{ range .Input.annotations }}
+          {{- .key}}: "{{ .value }}"
+        {{ end }}
+        {{- end }}
+  {{ end }}
+
+{{ . }}
